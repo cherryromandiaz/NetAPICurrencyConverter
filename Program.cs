@@ -1,5 +1,6 @@
 ﻿using CurrencyConverter.Extensions;
 using CurrencyConverter.Models;
+using CurrencyConverter.Middlewares;
 using Serilog;
 
 var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
@@ -26,7 +27,7 @@ if (string.IsNullOrWhiteSpace(jwtSettings?.SecretKey))
 }
 
 builder.Services.Configure<JwtSettings>(jwtSettingsSection);
-
+builder.Services.AddHttpContextAccessor();
 builder.Services
 	.AddMemoryCache()
 	.AddAuthorization()
@@ -49,6 +50,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseRateLimiter();
 
 app.MapControllers();

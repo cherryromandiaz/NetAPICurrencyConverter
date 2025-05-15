@@ -13,15 +13,20 @@ namespace CurrencyConverter.Services
         private readonly IMemoryCache _cache;
         private readonly ILogger<FrankfurterService> _logger;
         private static readonly string[] ExcludedCurrencies = { "TRY", "PLN", "THB", "MXN" };
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public FrankfurterService(HttpClient httpClient, IMemoryCache cache, ILogger<FrankfurterService> logger, IConfiguration configuration)
+		public FrankfurterService(HttpClient httpClient, 
+			IMemoryCache cache, 
+			ILogger<FrankfurterService> logger, 
+			IConfiguration configuration, 
+			IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _cache = cache;
             _logger = logger;
-
-            // Get the base address from configuration
-            string baseAddress = configuration["CurrencyProviders:Frankfurter"]
+            _httpContextAccessor = httpContextAccessor;
+			// Get the base address from configuration
+			string baseAddress = configuration["CurrencyProviders:Frankfurter"]
                                  ?? throw new InvalidOperationException("Frankfurter API base address not found in configuration");
 
             _httpClient.BaseAddress = new Uri(baseAddress);
@@ -31,7 +36,8 @@ namespace CurrencyConverter.Services
 
         public async Task<ExchangeRateResponse> GetLatestRatesAsync(string baseCurrency)
         {
-            try
+	        AttachCorrelationId();
+			try
             {
                 string cacheKey = $"latest-{baseCurrency.ToUpper()}";
                 if (_cache.TryGetValue(cacheKey, out ExchangeRateResponse cached))
@@ -65,7 +71,8 @@ namespace CurrencyConverter.Services
 
         public async Task<decimal> ConvertCurrencyAsync(string from, string to, decimal amount)
         {
-            try
+	        AttachCorrelationId();
+			try
             {
                 if (ExcludedCurrencies.Contains(from) || ExcludedCurrencies.Contains(to))
                 {
@@ -106,7 +113,8 @@ namespace CurrencyConverter.Services
 
         public async Task<List<ExchangeRateResponse>> GetHistoricalRatesAsync(string baseCurrency, DateTime startDate, DateTime endDate, int page, int pageSize)
         {
-            try
+	        AttachCorrelationId();
+			try
             {
                 string cacheKey = $"history-{baseCurrency}-{startDate:yyyyMMdd}-{endDate:yyyyMMdd}-{page}-{pageSize}";
                 if (_cache.TryGetValue(cacheKey, out List<ExchangeRateResponse> cachedHistory))
@@ -153,5 +161,19 @@ namespace CurrencyConverter.Services
                 throw;
             }
         }
-    }
+
+        private void AttachCorrelationId()
+        {
+	        var correlationId = _httpContextAccessor.HttpContext?.TraceIdentifier
+	                            ?? Guid.NewGuid().ToString();
+
+	        if (_httpClient.DefaultRequestHeaders.Contains("X-Correlation-ID"))
+	        {
+		        _httpClient.DefaultRequestHeaders.Remove("X-Correlation-ID");
+	        }
+
+	        _httpClient.DefaultRequestHeaders.Add("X-Correlation-ID", correlationId);
+	        _logger.LogInformation("Attached Correlation ID: {CorrelationId} to outbound request", correlationId);
+        }
+	}
 }

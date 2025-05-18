@@ -1,6 +1,7 @@
 using CurrencyConverter.Interfaces;
 using CurrencyConverter.Models;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
@@ -17,7 +18,8 @@ namespace CurrencyConverter.Services
 
 		public FrankfurterService(HttpClient httpClient, 
 			IMemoryCache cache, 
-			ILogger<FrankfurterService> logger, 
+			ILogger<FrankfurterService> logger,
+			IOptions<FrankfurterSettings> frankfurterOptions,
 			IConfiguration configuration, 
 			IHttpContextAccessor httpContextAccessor)
         {
@@ -25,14 +27,21 @@ namespace CurrencyConverter.Services
             _cache = cache;
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
+            var settings = frankfurterOptions.Value;
 			// Get the base address from configuration
-			string baseAddress = configuration["CurrencyProviders:Frankfurter"]
-                                 ?? throw new InvalidOperationException("Frankfurter API base address not found in configuration");
+			//string baseAddress = configuration["CurrencyProviders:Frankfurter"]
+			//                              ?? throw new InvalidOperationException("Frankfurter API base address not found in configuration");
 
-            _httpClient.BaseAddress = new Uri(baseAddress);
+			//         _httpClient.BaseAddress = new Uri(baseAddress);
 
-            _logger.LogInformation("FrankfurterService initialized with base URL: {BaseUrl}", _httpClient.BaseAddress);
-        }
+			//         _logger.LogInformation("FrankfurterService initialized with base URL: {BaseUrl}", _httpClient.BaseAddress);
+
+			if (string.IsNullOrWhiteSpace(settings.BaseUrl))
+				throw new InvalidOperationException("Frankfurter BaseUrl is not configured.");
+
+			_httpClient.BaseAddress = new Uri(settings.BaseUrl); // Use value from settings
+			_logger.LogInformation("FrankfurterService initialized with base URL: {BaseUrl}", _httpClient.BaseAddress);
+		}
 
         public async Task<ExchangeRateResponse> GetLatestRatesAsync(string baseCurrency)
         {

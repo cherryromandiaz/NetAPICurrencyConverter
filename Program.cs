@@ -24,6 +24,7 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
+Log.Information("Running in: {Environment}", builder.Environment.EnvironmentName);
 
 // --- JWT Settings ---
 var jwtSettingsSection = builder.Configuration.GetSection("JwtSettings");
@@ -31,6 +32,8 @@ var jwtSettings = jwtSettingsSection.Get<JwtSettings>();
 if (string.IsNullOrWhiteSpace(jwtSettings?.SecretKey))
 	throw new Exception("JWT SecretKey is missing or empty in configuration.");
 
+builder.Services.Configure<FrankfurterSettings>(
+	builder.Configuration.GetSection("Frankfurter"));
 builder.Services.Configure<JwtSettings>(jwtSettingsSection);
 builder.Services.AddHttpContextAccessor();
 
@@ -81,11 +84,25 @@ builder.Services
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
 	app.UseSwagger();
 	app.UseSwaggerUI();
-}
+//}
+
+app.Use(async (context, next) =>
+{
+	// Require authenticated user for /swagger
+	if (context.Request.Path.StartsWithSegments("/swagger") &&
+	    !context.User.Identity?.IsAuthenticated == true)
+	{
+		context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+		await context.Response.WriteAsync("Unauthorized");
+		return;
+	}
+
+	await next();
+});
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

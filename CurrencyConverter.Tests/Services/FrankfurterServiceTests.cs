@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using System;
@@ -24,6 +25,7 @@ namespace CurrencyConverter.Tests.Services
 		private readonly Mock<ILogger<FrankfurterService>> _loggerMock;
 		private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
 		private readonly Mock<IConfiguration> _configurationMock;
+		private readonly Mock<IOptions<FrankfurterSettings>> _settingsMock;
 		private readonly string _frankfurterBaseUrl = "https://api.frankfurter.app/";
 		private HttpClient _httpClient;
 
@@ -43,6 +45,12 @@ namespace CurrencyConverter.Tests.Services
 			var httpContext = new DefaultHttpContext();
 			httpContext.TraceIdentifier = "test-correlation-id";
 			_httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
+			_settingsMock = new Mock<IOptions<FrankfurterSettings>>();
+			_settingsMock.Setup(s => s.Value).Returns(new FrankfurterSettings
+			{
+				BaseUrl = _frankfurterBaseUrl,
+				ApiKey = "dummy-api-key"
+			});
 		}
 
 		private FrankfurterService CreateService(HttpClient httpClient = null)
@@ -52,6 +60,7 @@ namespace CurrencyConverter.Tests.Services
 				_httpClient,
 				_memoryCacheMock.Object,
 				_loggerMock.Object,
+				_settingsMock.Object,
 				_configurationMock.Object,
 				_httpContextAccessorMock.Object
 			);

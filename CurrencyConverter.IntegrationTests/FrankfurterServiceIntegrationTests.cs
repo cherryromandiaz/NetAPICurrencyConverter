@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using System.Net;
 using System.Net.Http.Json;
@@ -39,12 +40,18 @@ namespace CurrencyConverter.IntegrationTests
 			var logger = new LoggerFactory().CreateLogger<FrankfurterService>();
 
 			var context = new DefaultHttpContext();
+			var settings = Options.Create(new FrankfurterSettings
+			{
+				BaseUrl = _mockServer.Url!,
+				ApiKey = "dummy-api-key"
+			});
 			var httpContextAccessor = new HttpContextAccessor
 			{
 				HttpContext = context
 			};
 
-			_service = new FrankfurterService(httpClient, cache, logger, config, httpContextAccessor);
+
+			_service = new FrankfurterService(httpClient, cache, logger, settings, config, httpContextAccessor);
 		}
 
 		public void Dispose()

@@ -1,6 +1,10 @@
 ﻿using CurrencyConverter.Extensions;
 using CurrencyConverter.Models;
 using CurrencyConverter.Middlewares;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -37,7 +41,24 @@ builder.Services.Configure<FrankfurterSettings>(
 builder.Services.Configure<JwtSettings>(jwtSettingsSection);
 builder.Services.AddHttpContextAccessor();
 
-// --- OpenTelemetry Tracing, Metrics, and Logging ---
+// --- API Versioning ---
+builder.Services.AddApiVersioning(options =>
+{
+	options.DefaultApiVersion = new ApiVersion(1, 0);
+	options.AssumeDefaultVersionWhenUnspecified = true;
+	options.ReportApiVersions = true;
+});
+builder.Services.AddVersionedApiExplorer(options =>
+{
+	options.GroupNameFormat = "'v'VVV";
+	options.SubstituteApiVersionInUrl = true;
+});
+
+// --- Swagger (Versioned + JWT) ---
+builder.Services.AddSwaggerWithJwt();
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>(); // adds versioning support
+
+// --- OpenTelemetry ---
 var otelServiceName = "CurrencyConverterService";
 
 builder.Services.AddOpenTelemetry()
@@ -68,7 +89,6 @@ builder.Logging.AddOpenTelemetry(options =>
 	options.IncludeScopes = true;
 	options.ParseStateValues = true;
 	options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(otelServiceName));
-	
 });
 
 // --- App Services ---
@@ -77,24 +97,28 @@ builder.Services
 	.AddAuthorization()
 	.AddFrankfurterClient(builder.Configuration)
 	.AddJwtAuthentication(builder.Configuration)
-	.AddSwaggerWithJwt()
 	.AddFixedRateLimiting()
 	.AddApplicationServices()
 	.AddControllers();
 
 var app = builder.Build();
 
-//if (app.Environment.IsDevelopment())
-//{
-	app.UseSwagger();
-	app.UseSwaggerUI();
-//}
+// --- Swagger UI ---
+var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+	foreach (var description in provider.ApiVersionDescriptions)
+	{
+		options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json",
+			$"Currency Converter API {description.GroupName.ToUpperInvariant()}");
+	}
+});
 
 app.Use(async (context, next) =>
 {
-	// Require authenticated user for /swagger
 	if (context.Request.Path.StartsWithSegments("/swagger") &&
-	    !context.User.Identity?.IsAuthenticated == true)
+		!context.User.Identity?.IsAuthenticated == true)
 	{
 		context.Response.StatusCode = StatusCodes.Status401Unauthorized;
 		await context.Response.WriteAsync("Unauthorized");
